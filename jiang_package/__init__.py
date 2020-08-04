@@ -11,7 +11,7 @@ import time
 from joblib import Parallel, delayed
 import multiprocessing
 
-
+print('load jp')
 def fn_timer(function):
   @wraps(function)
   def function_timer(*args, **kwargs):
@@ -40,9 +40,8 @@ def standardization(df,groups):
     return df
 
 
-#时间序列转成监督学习模型
-def func_series_to_supervised(dataset, n_in=1):
-    #dataset = pd.DataFrame(data)
+#时间序列转换为监督学习样本
+def series_to_supervised(dataset, n_in=1):
     df_all=pd.DataFrame([])
     for i in range(n_in, -1, -1):      
         df_back=dataset.shift(i)      #把数据整体下移i格
@@ -52,12 +51,13 @@ def func_series_to_supervised(dataset, n_in=1):
         #print(df_all.index)
     return df_all
 
+def series_to_supervised_parallel(data, n_in=1):
+    re=Parallel(n_jobs=40)(delayed(series_to_supervised)(df,n_in) for code,df in data.groupby('code'))
+    re=pd.concat(re)
+    return re
 
-#废弃，使用多线程
-# def series_to_supervised(dataset, n_in=1):
-#     df=dataset.groupby('code').apply(func_series_to_supervised,n_in)    #时间序列转换为监督学习样本
- 
 
+#使用单条样本内相关分组进行标准化（去均值化）
 def func_scale_axis1(se,groups):
     #部分不同列的数据具有相关性，需要统一标准化
     col_names=se.index
@@ -71,29 +71,29 @@ def func_scale_axis1(se,groups):
         assemble_scale_column=col
         ar=np.ravel(se[assemble_scale_column])
         ar=ar/ar.mean()    #去均值的中心化（均值变为0）
-#         se[assemble_scale_column] = preprocessing.scale(ar)
         se[assemble_scale_column] = ar
     return se
 
-#时间序列转换为监督学习样本
-def series_to_supervised(dataset, n_in=1):
-    df=func_series_to_supervised(dataset,n_in)    #时间序列转换为监督学习样本
+def standardization_axis1(dataset,col_groups):
+    dataset=dataset.copy()
+    df=dataset.apply(func_scale_axis1, args=(col_groups,),axis=1)
     return df
-@fn_timer
-def series_to_supervised_parallel(data, n_in=1):
-    re=Parallel(n_jobs=40)(delayed(series_to_supervised)(df,n_in) for code,df in data.groupby('code'))
-    re=pd.concat(re)
-    return re
 
-
-def standardization_axis1(dataset,groups):
-    df=dataset.apply(func_scale_axis1, args=(groups,),axis=1)
-    return df
-@fn_timer
 def standardization_axis1_parallel(data,col_groups):
     re=Parallel(n_jobs=40)(delayed(standardization_axis1)(df, col_groups) for code,df in data.groupby('code'))
     re=pd.concat(re)
     return re
+
+def drop_columns(df,cols):
+    #部分不同列的数据具有相关性，需要统一标准化
+    col_names=[]
+    for col in cols:
+        col='^'+col+'_\d+$'
+        col_names=col_names+df.columns[df.columns.str.match(col)].to_list()
+        df=df.drop(col_names,axis=1,errors='ignore')
+    return df
+
+
 
 def max_min_close_n_days(data, n=30):
     '''
@@ -227,13 +227,13 @@ def get_all_indicator(data):
     
     return dataset
 
-def get_all_indicator(data):
-    dataset=pd.DataFrame()
+# def get_all_indicator(data):
+#     dataset=pd.DataFrame()
 
-    indicator=QA.QA_indicator_RSI(data)
-    dataset=pd.concat([dataset,indicator],axis=1)
+#     indicator=QA.QA_indicator_RSI(data)
+#     dataset=pd.concat([dataset,indicator],axis=1)
     
-    return dataset
+#     return dataset
 
 def split_bin(data,bins=5):
     bins=pd.cut(data.iloc[:,0],bins,retbins=False)
