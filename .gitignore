@@ -1,3 +1,5 @@
 push.sh
-.ipynb_checkpoints
+/.ipynb_checkpoints
+.*
+/.*
 
