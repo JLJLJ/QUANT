@@ -13,15 +13,16 @@ import multiprocessing
 
 print('load jp')
 def fn_timer(function):
-  @wraps(function)
-  def function_timer(*args, **kwargs):
-    t0 = time.time()
-    result = function(*args, **kwargs)
-    t1 = time.time()
-    print ("Total time running %s: %s seconds" %
-        (function.__name__, str(t1-t0)))
-    return result
-  return function_timer
+    #fun运行时长
+    @wraps(function)
+    def function_timer(*args, **kwargs):
+        t0 = time.time()
+        result = function(*args, **kwargs)
+        t1 = time.time()
+        print ("Total time running %s: %s seconds" %
+            (function.__name__, str(t1-t0)))
+        return result
+    return function_timer
 
 def func_scale(df,groups):
     #部分不同列的数据具有相关性，需要统一标准化
@@ -40,8 +41,9 @@ def standardization(df,groups):
     return df
 
 
-#时间序列转换为监督学习样本
+
 def series_to_supervised(dataset, n_in=1):
+    #时间序列转换为监督学习样本
     df_all=pd.DataFrame([])
     for i in range(n_in, -1, -1):      
         df_back=dataset.shift(i)      #把数据整体下移i格
@@ -52,6 +54,7 @@ def series_to_supervised(dataset, n_in=1):
     return df_all
 
 def series_to_supervised_parallel(data, n_in=1):
+    #多线程时间序列转换为监督学习样本
     re=Parallel(n_jobs=40)(delayed(series_to_supervised)(df,n_in) for code,df in data.groupby('code'))
     re=pd.concat(re)
     return re
@@ -75,17 +78,19 @@ def func_scale_axis1(se,groups):
     return se
 
 def standardization_axis1(dataset,col_groups):
+    #对单个样本中的指定特征进行标准化
     dataset=dataset.copy()
     df=dataset.apply(func_scale_axis1, args=(col_groups,),axis=1)
     return df
 
 def standardization_axis1_parallel(data,col_groups):
+    #多线程对单个样本中的指定特征进行标准化，单个样本的数个特征具有相关性，需要统一标准化
     re=Parallel(n_jobs=40)(delayed(standardization_axis1)(df, col_groups) for code,df in data.groupby('code'))
     re=pd.concat(re)
     return re
 
 def drop_columns(df,cols):
-    #部分不同列的数据具有相关性，需要统一标准化
+    #模糊查找特征名，并删除该特征。以关键字开头的特征将被匹配
     col_names=[]
     for col in cols:
         col='^'+col+'_\d+$'
@@ -240,3 +245,13 @@ def split_bin(data,bins=5):
     ont_hot=pd.get_dummies(bins)
     return ont_hot
 
+def add_prefix(df,prefix):
+    '''
+    对特征添加前坠
+    '''
+    columns=df.columns
+    columns=pd.Series(columns)
+    new_columns=prefix+'_'+columns
+    new_columns.index=columns
+    df.rename(columns = new_columns.to_dict(),  inplace=True)
+    return df
